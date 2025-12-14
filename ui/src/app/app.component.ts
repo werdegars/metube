@@ -51,6 +51,10 @@ export class AppComponent implements AfterViewInit {
   failedDownloads = 0;
   totalSpeed = 0;
 
+  cropStart: string = '';
+  cropEnd: string = '';
+  forceKeyframes: boolean = false;
+  
   @ViewChild('queueMasterCheckbox') queueMasterCheckbox: MasterCheckboxComponent;
   @ViewChild('queueDelSelected') queueDelSelected: ElementRef;
   @ViewChild('queueDownloadSelected') queueDownloadSelected: ElementRef;
@@ -253,24 +257,56 @@ export class AppComponent implements AfterViewInit {
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
-    url = url ?? this.addUrl
-    quality = quality ?? this.quality
-    format = format ?? this.format
-    folder = folder ?? this.folder
-    customNamePrefix = customNamePrefix ?? this.customNamePrefix
-    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode
-    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit
-    autoStart = autoStart ?? this.autoStart
+    url = url ?? this.addUrl;  // Note: it's this.addUrl, not this.url (based on common MeTube versions)
+    quality = quality ?? this.quality;
+    format = format ?? this.format;
+    folder = folder ?? this.folder;
+    customNamePrefix = customNamePrefix ?? this.customNamePrefix;
+    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode;
+    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit;
+    autoStart = autoStart ?? this.autoStart;
 
-    console.debug('Downloading: url='+url+' quality='+quality+' format='+format+' folder='+folder+' customNamePrefix='+customNamePrefix+' playlistStrictMode='+playlistStrictMode+' playlistItemLimit='+playlistItemLimit+' autoStart='+autoStart);
+    if (this.addInProgress || !url.trim()) return;
+
     this.addInProgress = true;
-    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
-      if (status.status === 'error') {
-        alert(`Error adding URL: ${status.msg}`);
-      } else {
-        this.addUrl = '';
+
+    let ytdlOptions: any = {};
+
+    if (this.cropStart?.trim() && this.cropEnd?.trim()) {
+      ytdlOptions.download_sections = `*${this.cropStart.trim()}-${this.cropEnd.trim()}`;
+
+      if (this.forceKeyframes) {
+        ytdlOptions.force_keyframes_at_cuts = true;
       }
-      this.addInProgress = false;
+    }
+
+    // Add folder if your version supports it
+    const payload: any = {
+      url: url.trim(),
+      quality,
+      format,
+      ytdlOptions  // Empty object is ignored by backend
+    };
+
+    if (folder) {
+      payload.folder = folder;
+    }
+    // Add other params if needed (customNamePrefix, etc.)
+
+    this.http.post('/add', payload).subscribe({
+      next: (response: any) => {
+        this.addUrl = '';  // Clear the URL input
+        this.cropStart = '';
+        this.cropEnd = '';
+        this.forceKeyframes = false;
+        // Reset other fields if desired (e.g., this.quality = default;)
+        this.addInProgress = false;
+      },
+      error: (error) => {
+        console.error(error);
+        alert('Error adding URL: ' + (error.error?.message || error.message || 'Unknown'));
+        this.addInProgress = false;
+      }
     });
   }
 
