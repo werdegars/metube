@@ -135,27 +135,26 @@
               <!-- Advanced Settings -->
               <!-- ADD YOUR NEW FIELDS HERE -->
                 <div class="row g-3 mb-3">
-                  <div class="col-md-6">
+                    <div class="col-md-6">
                     <div class="input-group">
-                      <span class="input-group-text">Start Time</span>
-                      <input type="text" class="form-control" [(ngModel)]="cropStart" placeholder="e.g., 05:25:04 or 19507s">
+                        <span class="input-group-text">Start Time</span>
+                        <input type="text" class="form-control" [(ngModel)]="cropStart" placeholder="e.g., 05:25:04 or 19507s">
                     </div>
                     <small class="form-text text-muted">hh:mm:ss, seconds, or leave blank</small>
-                  </div>
-                  <div class="col-md-6">
+                    </div>
+                    <div class="col-md-6">
                     <div class="input-group">
-                      <span class="input-group-text">End Time</span>
-                      <input type="text" class="form-control" [(ngModel)]="cropEnd" placeholder="e.g., 05:56:25, 21384s, or inf">
+                        <span class="input-group-text">End Time</span>
+                        <input type="text" class="form-control" [(ngModel)]="cropEnd" placeholder="e.g., 05:56:25, 21384s, or inf">
                     </div>
                     <small class="form-text text-muted">hh:mm:ss, seconds, 'inf' for to end, or leave blank</small>
-                  </div>
+                    </div>
                 </div>
                 <!-- Optional checkbox for precision -->
                 <div class="form-check mb-3">
-                  <input class="form-check-input" type="checkbox" [(ngModel)]="forceKeyframes">
-                  <label class="form-check-label">Force exact cuts (slower, uses --force-keyframes-at-cuts)</label>
+                    <input class="form-check-input" type="checkbox" [(ngModel)]="forceKeyframes">
+                    <label class="form-check-label">Force exact cuts (slower, uses --force-keyframes-at-cuts)</label>
                 </div>
-              </div>
               <div class="row g-3 mb-2">
                 <div class="col-md-6">
                   <div class="input-group">
