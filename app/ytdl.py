@@ -417,7 +417,9 @@ class DownloadQueue:
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
 
-    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None):
+    #async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None):
+    async def add(self, url, quality, format=None, folder=None, custom_name_prefix='', playlist_strict_mode=False, playlist_item_limit=0, auto_start=True, extra_options=None, already=None):
+        extra_options = extra_options or {}
         log.info(f'adding {url}: {quality=} {format=} {already=} {folder=} {custom_name_prefix=} {playlist_strict_mode=} {playlist_item_limit=} {auto_start=}')
         already = set() if already is None else already
         if url in already:
@@ -478,3 +480,4 @@ class DownloadQueue:
         return (list((k, v.info) for k, v in self.queue.items()) +
                 list((k, v.info) for k, v in self.pending.items()),
                 list((k, v.info) for k, v in self.done.items()))
+
