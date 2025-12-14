@@ -51,6 +51,10 @@ export class AppComponent implements AfterViewInit {
   failedDownloads = 0;
   totalSpeed = 0;
 
+  cropStart: string = '';
+  cropEnd: string = '';
+  forceKeyframes: boolean = false;
+  
   @ViewChild('queueMasterCheckbox') queueMasterCheckbox: MasterCheckboxComponent;
   @ViewChild('queueDelSelected') queueDelSelected: ElementRef;
   @ViewChild('queueDownloadSelected') queueDownloadSelected: ElementRef;
