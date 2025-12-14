@@ -285,7 +285,8 @@ export class AppComponent implements AfterViewInit {
       url: url.trim(),
       quality,
       format,
-      ytdlOptions  // Empty object is ignored by backend
+      crop_start: this.cropStart.trim(),  // new, simple string
+      crop_end: this.cropEnd.trim(),      // new
     };
 
     if (folder) {
