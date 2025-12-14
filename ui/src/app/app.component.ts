@@ -257,51 +257,56 @@ export class AppComponent implements AfterViewInit {
   }
 
   addDownload(url?: string, quality?: string, format?: string, folder?: string, customNamePrefix?: string, playlistStrictMode?: boolean, playlistItemLimit?: number, autoStart?: boolean) {
-    url = url ?? this.addUrl
-    quality = quality ?? this.quality
-    format = format ?? this.format
-    folder = folder ?? this.folder
-    customNamePrefix = customNamePrefix ?? this.customNamePrefix
-    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode
-    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit
-    autoStart = autoStart ?? this.autoStart
-    let extraOptions: any = {};
-  
-    if (this.cropStart && this.cropEnd) {
-      const section = `*${this.cropStart.trim()}-${this.cropEnd.trim()}`;
-      extraOptions['download_sections'] = section;
-  
+    url = url ?? this.addUrl;  // Note: it's this.addUrl, not this.url (based on common MeTube versions)
+    quality = quality ?? this.quality;
+    format = format ?? this.format;
+    folder = folder ?? this.folder;
+    customNamePrefix = customNamePrefix ?? this.customNamePrefix;
+    playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode;
+    playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit;
+    autoStart = autoStart ?? this.autoStart;
+
+    if (this.addInProgress || !url.trim()) return;
+
+    this.addInProgress = true;
+
+    let ytdlOptions: any = {};
+
+    if (this.cropStart?.trim() && this.cropEnd?.trim()) {
+      ytdlOptions.download_sections = `*${this.cropStart.trim()}-${this.cropEnd.trim()}`;
+
       if (this.forceKeyframes) {
-        extraOptions['force_keyframes_at_cuts'] = true;
+        ytdlOptions.force_keyframes_at_cuts = true;
       }
     }
-  
-    // Merge with existing options (quality/format are already handled)
-    const payload = {
-      url: this.url,
-      quality: this.quality,
-      format: this.format,
-      // ... any other fields
-      ytdlOptions: { ...this.baseYtdlOptions, ...extraOptions }  // if it uses ytdlOptions object
+
+    // Add folder if your version supports it
+    const payload: any = {
+      url: url.trim(),
+      quality,
+      format,
+      ytdlOptions  // Empty object is ignored by backend
     };
-  
-    // Then send the HTTP POST/fetch to '/add' with payload
-    this.http.post('/add', payload).subscribe(...);
-    
-    // Clear fields after submit if desired
-    this.cropStart = '';
-    this.cropEnd = '';
-    this.forceKeyframes = false;
-  
-    console.debug('Downloading: url='+url+' quality='+quality+' format='+format+' folder='+folder+' customNamePrefix='+customNamePrefix+' playlistStrictMode='+playlistStrictMode+' playlistItemLimit='+playlistItemLimit+' autoStart='+autoStart);
-    this.addInProgress = true;
-    this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
-      if (status.status === 'error') {
-        alert(`Error adding URL: ${status.msg}`);
-      } else {
-        this.addUrl = '';
+
+    if (folder) {
+      payload.folder = folder;
+    }
+    // Add other params if needed (customNamePrefix, etc.)
+
+    this.http.post('/add', payload).subscribe({
+      next: (response: any) => {
+        this.addUrl = '';  // Clear the URL input
+        this.cropStart = '';
+        this.cropEnd = '';
+        this.forceKeyframes = false;
+        // Reset other fields if desired (e.g., this.quality = default;)
+        this.addInProgress = false;
+      },
+      error: (error) => {
+        console.error(error);
+        alert('Error adding URL: ' + (error.error?.message || error.message || 'Unknown'));
+        this.addInProgress = false;
       }
-      this.addInProgress = false;
     });
   }
 
