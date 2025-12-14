@@ -265,7 +265,34 @@ export class AppComponent implements AfterViewInit {
     playlistStrictMode = playlistStrictMode ?? this.playlistStrictMode
     playlistItemLimit = playlistItemLimit ?? this.playlistItemLimit
     autoStart = autoStart ?? this.autoStart
-
+    let extraOptions: any = {};
+  
+    if (this.cropStart && this.cropEnd) {
+      const section = `*${this.cropStart.trim()}-${this.cropEnd.trim()}`;
+      extraOptions['download_sections'] = section;
+  
+      if (this.forceKeyframes) {
+        extraOptions['force_keyframes_at_cuts'] = true;
+      }
+    }
+  
+    // Merge with existing options (quality/format are already handled)
+    const payload = {
+      url: this.url,
+      quality: this.quality,
+      format: this.format,
+      // ... any other fields
+      ytdlOptions: { ...this.baseYtdlOptions, ...extraOptions }  // if it uses ytdlOptions object
+    };
+  
+    // Then send the HTTP POST/fetch to '/add' with payload
+    this.http.post('/add', payload).subscribe(...);
+    
+    // Clear fields after submit if desired
+    this.cropStart = '';
+    this.cropEnd = '';
+    this.forceKeyframes = false;
+  
     console.debug('Downloading: url='+url+' quality='+quality+' format='+format+' folder='+folder+' customNamePrefix='+customNamePrefix+' playlistStrictMode='+playlistStrictMode+' playlistItemLimit='+playlistItemLimit+' autoStart='+autoStart);
     this.addInProgress = true;
     this.downloads.add(url, quality, format, folder, customNamePrefix, playlistStrictMode, playlistItemLimit, autoStart).subscribe((status: Status) => {
