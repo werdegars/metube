@@ -211,6 +211,7 @@ if config.YTDL_OPTIONS_FILE:
 async def add(request):
     log.info("Received request to add download")
     post = await request.json()
+    ytdl_options = post.get('ytdlOptions', {})
     log.info(f"Request data: {post}")
     url = post.get('url')
     quality = post.get('quality')
@@ -235,7 +236,7 @@ async def add(request):
 
     playlist_item_limit = int(playlist_item_limit)
 
-    status = await dqueue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start)
+    status = await dqueue.add(url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, extra_options=ytdl_options)
     return web.Response(text=serializer.encode(status))
 
 @routes.post(config.URL_PREFIX + 'delete')
@@ -417,3 +418,4 @@ if __name__ == '__main__':
         web.run_app(app, host=config.HOST, port=int(config.PORT), reuse_port=supports_reuse_port(), ssl_context=ssl_context, access_log=isAccessLogEnabled())
     else:
         web.run_app(app, host=config.HOST, port=int(config.PORT), reuse_port=supports_reuse_port(), access_log=isAccessLogEnabled())
+
