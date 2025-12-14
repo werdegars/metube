@@ -5,6 +5,8 @@
 
 Web GUI for youtube-dl (using the [yt-dlp](https://github.com/yt-dlp/yt-dlp) fork) with playlist support. Allows you to download videos from YouTube and [dozens of other sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
+* Added Start and Stop Time range
+
 ![screenshot1](https://github.com/alexta69/metube/raw/master/screenshot.gif)
 
 ## 🐳 Run using Docker
@@ -289,3 +291,4 @@ docker build -t metube .
 ```
 
 Note that if you're running the server in VSCode, your downloads will go to your user's Downloads folder (this is configured via the environment in `.vscode/launch.json`).
+
