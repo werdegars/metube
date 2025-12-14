@@ -8,6 +8,7 @@ import multiprocessing
 import logging
 import re
 import types
+import subprocess
 
 import yt_dlp.networking.impersonate
 from dl_formats import get_format, get_opts, AUDIO_FORMATS
@@ -43,7 +44,7 @@ class DownloadQueueNotifier:
         raise NotImplementedError
 
 class DownloadInfo:
-    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit):
+    def __init__(self, id, title, url, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, crop_start=None, crop_end=None):
         self.id = id if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{id}'
         self.title = title if len(custom_name_prefix) == 0 else f'{custom_name_prefix}.{title}'
         self.url = url
@@ -59,6 +60,8 @@ class DownloadInfo:
         # Convert generators to lists to make entry pickleable
         self.entry = _convert_generators_to_lists(entry) if entry is not None else None
         self.playlist_item_limit = playlist_item_limit
+        self.crop_start = crop_start
+        self.crop_end = crop_end
 
 class Download:
     manager = None
@@ -305,6 +308,41 @@ class DownloadQueue:
                     pass
             download.info.status = 'error'
         download.close()
+
+        # === NEW: Automatic cropping if start/end times were set ===
+        crop_start = getattr(download.info, 'crop_start', None)
+        crop_end = getattr(download.info, 'crop_end', None)
+        filepath = None
+        if hasattr(download.info, 'filename') and download.info.filename:
+            # Build full path to the downloaded file
+            base_dir = self.config.DOWNLOAD_DIR if (download.info.quality != 'audio' and download.info.format not in AUDIO_FORMATS) else self.config.AUDIO_DOWNLOAD_DIR
+            if download.info.folder:
+                base_dir = os.path.join(base_dir, download.info.folder)
+            filepath = os.path.join(base_dir, download.info.filename)
+
+        if download.info.status == 'finished' and crop_start and crop_end and filepath and os.path.exists(filepath):
+            try:
+                import subprocess
+                cropped_path = os.path.splitext(filepath)[0] + "_cropped" + os.path.splitext(filepath)[1]
+                cmd = [
+                    'ffmpeg', '-hide_banner', '-loglevel', 'error',
+                    '-i', filepath,
+                    '-ss', crop_start, '-to', crop_end,
+                    '-c', 'copy', '-avoid_negative_ts', 'make_zero',
+                    cropped_path
+                ]
+                subprocess.run(cmd, check=True)
+                os.remove(filepath)                    # delete original full file
+                os.rename(cropped_path, filepath)      # replace with cropped version
+                log.info(f"Auto-cropped {filepath} from {crop_start} to {crop_end}")
+                if os.path.exists(filepath):
+                    download.info.size = os.path.getsize(filepath)
+                # Notify frontend to refresh the completed entry with new size
+                asyncio.create_task(self.notifier.updated(download.info))
+            except Exception as e:
+                log.error(f"FFmpeg crop failed for {filepath}: {e}")
+        # === END OF NEW CODE ===
+
         if self.queue.exists(download.info.url):
             self.queue.delete(download.info.url)
             if download.canceled:
@@ -321,7 +359,7 @@ class DownloadQueue:
             'ignore_no_formats_error': True,
             'noplaylist': playlist_strict_mode,
             'paths': {"home": self.config.DOWNLOAD_DIR, "temp": self.config.TEMP_DIR},
-            **self.config.YTDL_OPTIONS, **extra_options,
+            **self.config.YTDL_OPTIONS,
             **({'impersonate': yt_dlp.networking.impersonate.ImpersonateTarget.from_str(self.config.YTDL_OPTIONS['impersonate'])} if 'impersonate' in self.config.YTDL_OPTIONS else {}),
         }).extract_info(url, download=False)
 
@@ -368,7 +406,7 @@ class DownloadQueue:
             self.pending.put(download)
         await self.notifier.added(dl)
 
-    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already):
+    async def __add_entry(self, entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, crop_start, crop_end, already):
         if not entry:
             return {'status': 'error', 'msg': "Invalid/empty data was given."}
 
@@ -412,14 +450,13 @@ class DownloadQueue:
             log.debug('Processing as a video')
             key = entry.get('webpage_url') or entry['url']
             if not self.queue.exists(key):
-                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit)
+                #dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit)
+                dl = DownloadInfo(entry['id'], entry.get('title') or entry['id'], key, quality, format, folder, custom_name_prefix, error, entry, playlist_item_limit, crop_start, crop_end)
                 await self.__add_download(dl, auto_start)
             return {'status': 'ok'}
         return {'status': 'error', 'msg': f'Unsupported resource "{etype}"'}
 
-    #async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, already=None):
-    async def add(self, url, quality, format=None, folder=None, custom_name_prefix='', playlist_strict_mode=False, playlist_item_limit=0, auto_start=True, extra_options=None, already=None):
-        extra_options = extra_options or {}
+    async def add(self, url, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start=True, crop_start=None, crop_end=None, already=None):
         log.info(f'adding {url}: {quality=} {format=} {already=} {folder=} {custom_name_prefix=} {playlist_strict_mode=} {playlist_item_limit=} {auto_start=}')
         already = set() if already is None else already
         if url in already:
@@ -431,7 +468,7 @@ class DownloadQueue:
             entry = await asyncio.get_running_loop().run_in_executor(None, self.__extract_info, url, playlist_strict_mode)
         except yt_dlp.utils.YoutubeDLError as exc:
             return {'status': 'error', 'msg': str(exc)}
-        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, already)
+        return await self.__add_entry(entry, quality, format, folder, custom_name_prefix, playlist_strict_mode, playlist_item_limit, auto_start, crop_start, crop_end, already)
 
     async def start_pending(self, ids):
         for id in ids:
@@ -465,15 +502,40 @@ class DownloadQueue:
             if not self.done.exists(id):
                 log.warn(f'requested delete for non-existent download {id}')
                 continue
-            if self.config.DELETE_FILE_ON_TRASHCAN:
-                dl = self.done.get(id)
-                try:
-                    dldirectory, _ = self.__calc_download_path(dl.info.quality, dl.info.format, dl.info.folder)
-                    os.remove(os.path.join(dldirectory, dl.info.filename))
-                except Exception as e:
-                    log.warn(f'deleting file for download {id} failed with error message {e!r}')
+
+            dl = self.done.get(id)
+            try:
+                # Safely get the directory (handles video/audio folders)
+                dldirectory, error_msg = self.__calc_download_path(dl.info.quality, dl.info.format, dl.info.folder)
+                if dldirectory is None:
+                    log.warn(f'Cannot determine download directory for {id}: {error_msg.get("msg") if error_msg else "Unknown"}')
+                    continue
+
+                # Build full path safely — this handles spaces and special chars like ｜
+                full_path = os.path.join(dldirectory, dl.info.filename.strip())
+
+                # Security: prevent deleting files outside the allowed directory
+                real_base = os.path.realpath(dldirectory)
+                real_path = os.path.realpath(full_path)
+                #if not real_path.startswith(real_base + os.sep):
+                if not real_path.startswith(real_base):
+                    log.warn(f'Security block: attempted delete outside download dir: {full_path}')
+                    continue
+
+                # Delete if exists
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                    log.info(f'Successfully deleted file: {full_path}')
+                else:
+                    log.warn(f'File not found for deletion: {full_path}')
+
+            except Exception as e:
+                log.error(f'Failed to delete file for download {id}: {e}')
+
+            # Always remove from completed list
             self.done.delete(id)
             await self.notifier.cleared(id)
+
         return {'status': 'ok'}
 
     def get(self):
